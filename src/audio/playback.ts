@@ -7,9 +7,10 @@ export type SoundPreset = 'sine' | 'triangle' | 'piano' | 'bass'
 /** Tone.js transport and synth lifecycle, kept separate from progression generation. */
 export class ChordPlayback {
   private synth: Tone.PolySynth | null = null
+  private sampler: Tone.Sampler | null = null
   private reverb: Tone.Reverb | null = null
   private filter: Tone.Filter | null = null
-  private soundPreset: SoundPreset = 'sine'
+  private soundPreset: SoundPreset = 'piano'
   private active = false
   private callbacks: PlaybackCallbacks | null = null
   private symbols: string[] = []
@@ -30,8 +31,10 @@ export class ChordPlayback {
     if (this.soundPreset === preset) return
     this.soundPreset = preset
     this.synth?.dispose()
+    this.sampler?.dispose()
     this.filter?.dispose()
     this.synth = null
+    this.sampler = null
     this.filter = null
   }
 
@@ -58,7 +61,7 @@ export class ChordPlayback {
       if (!shouldPlay) return
       if (this.nextIndex >= this.symbols.length) {
         if (!this.loop) {
-          this.synth?.releaseAll(time)
+          this.releaseAll(time)
           this.active = false
           this.currentIndex = -1
           this.callbacks?.onEnd()
@@ -80,7 +83,8 @@ export class ChordPlayback {
     await this.ensureSynth()
     const shift = (rootOctave - 3) * 12
     const notes = voiceChordProgression([symbol])[0].map(note => midiToToneNote(note + shift))
-    this.synth?.triggerAttackRelease(notes, '2n', Tone.now(), 0.24)
+    if (this.soundPreset === 'piano') this.sampler?.triggerAttackRelease(notes, '2n', Tone.now(), 0.24)
+    else this.synth?.triggerAttackRelease(notes, '2n', Tone.now(), 0.24)
   }
 
   /** Update upcoming bars without interrupting transport; replacing the active chord is audible immediately. */
@@ -131,26 +135,44 @@ export class ChordPlayback {
     this.tickCount = 0
     this.symbols = []
     this.voicings = []
-    this.synth?.releaseAll()
+    this.releaseAll()
     this.callbacks = null
   }
 
   dispose() {
     this.stop()
     this.synth?.dispose()
+    this.sampler?.dispose()
     this.reverb?.dispose()
     this.filter?.dispose()
     this.synth = null
+    this.sampler = null
     this.reverb = null
     this.filter = null
   }
 
   private async ensureSynth() {
-    if (this.synth) return
+    if (this.soundPreset === 'piano' ? this.sampler : this.synth) return
     if (!this.reverb) {
       this.reverb = new Tone.Reverb({ decay: 1.8, preDelay: 0.018, wet: 0.16 })
       await this.reverb.ready
       this.reverb.toDestination()
+    }
+    if (this.soundPreset === 'piano') {
+      // Salamander Grand Piano V3 samples, hosted by the Tone.js project.
+      // The sampler fills the unrecorded notes by transposing nearby samples.
+      this.sampler = new Tone.Sampler({
+        urls: {
+          C3: 'C3.mp3', 'D#3': 'Ds3.mp3', 'F#3': 'Fs3.mp3', A3: 'A3.mp3',
+          C4: 'C4.mp3', 'D#4': 'Ds4.mp3', 'F#4': 'Fs4.mp3', A4: 'A4.mp3',
+          C5: 'C5.mp3', 'D#5': 'Ds5.mp3', 'F#5': 'Fs5.mp3', A5: 'A5.mp3',
+          C6: 'C6.mp3', 'D#6': 'Ds6.mp3', 'F#6': 'Fs6.mp3', A6: 'A6.mp3', C7: 'C7.mp3',
+        },
+        release: 1.2,
+        baseUrl: 'https://tonejs.github.io/audio/salamander/',
+      }).connect(this.reverb)
+      await Tone.loaded()
+      return
     }
     const settings = {
       sine: { volume: -11, oscillator: { type: 'sine' as const }, envelope: { attack: 0.06, decay: 0.24, sustain: 0.38, release: 0.72 } },
@@ -169,16 +191,22 @@ export class ChordPlayback {
   }
 
   private playIndex(index: number, time: number) {
-    if (!this.active || !this.synth || !this.voicings[index]) return
+    if (!this.active || (this.soundPreset === 'piano' ? !this.sampler : !this.synth) || !this.voicings[index]) return
     const soundingMidi = this.getSoundingMidi(index)
     const notes = soundingMidi.map(midiToToneNote)
-    this.synth.releaseAll(time)
-    this.synth.triggerAttack(notes, time, 0.24)
+    this.releaseAll(time)
+    if (this.soundPreset === 'piano') this.sampler?.triggerAttack(notes, time, 0.24)
+    else this.synth?.triggerAttack(notes, time, 0.24)
     this.currentIndex = index
     this.callbacks?.onChord(index, soundingMidi)
   }
 
   private getSoundingMidi(index: number) {
     return (this.voicings[index] ?? []).map(note => note + this.octaveShift)
+  }
+
+  private releaseAll(time?: number) {
+    this.synth?.releaseAll(time)
+    this.sampler?.releaseAll(time)
   }
 }

@@ -45,6 +45,8 @@ npm test         # コード解析・ボイシングのテスト
 
 再生には Tone.js を使用します。コード進行は 4/4 拍子で、1コードを1小節ずつ再生します。
 
+ピアノ音色には Salamander Grand Piano V3 のサンプルを使用しています。サンプルは Tone.js の公開音源 URL から必要時に読み込まれ、音源の作者は Alexander Holm、ライセンスは [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) です。クレジット: “Salamander Grand Piano V3” by Alexander Holm.
+
 ## 技術スタック
 
 - React
