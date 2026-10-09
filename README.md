@@ -37,7 +37,7 @@ npm test         # コード解析・ボイシングのテスト
 ## GitHub Pages で公開
 
 `main` ブランチへの push ごとに GitHub Actions がビルドと公開を行います。
-公開先: <https://einel256.github.io/Chordcraft/>
+公開先: <https://einel256.github.io/chordcraft/>
 
 ## 進行生成について
 
